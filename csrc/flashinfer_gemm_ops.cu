@@ -23,7 +23,7 @@ void CutlassSegmentGEMM(at::Tensor workspace_buffer, at::Tensor all_problems, at
                         at::Tensor y_ld, at::Tensor empty_x_data, bool weight_column_major,
                         int64_t cuda_stream);
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("cutlass_segment_gemm", &CutlassSegmentGEMM, "Cutlass Segment GEMM");
-  m.def("bmm_fp8", &bmm_fp8, "BMM FP8");
+TORCH_LIBRARY(TORCH_EXTENSION_NAME, m) {
+  m.def("cutlass_segment_gemm", &CutlassSegmentGEMM);
+  m.def("bmm_fp8", &bmm_fp8);
 }

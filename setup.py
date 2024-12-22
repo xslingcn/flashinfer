@@ -195,13 +195,13 @@ if enable_aot:
         "csrc/batch_prefill.cu",
         "csrc/single_decode.cu",
         "csrc/single_prefill.cu",
-        "csrc/flashinfer_ops.cu",
+        "csrc/flashinfer_aot_ops.cu",
     ]
     kernel_sm90_sources = [
         "csrc/group_gemm_sm90.cu",
         "csrc/single_prefill_sm90.cu",
         "csrc/batch_prefill_sm90.cu",
-        "csrc/flashinfer_ops_sm90.cu",
+        "csrc/flashinfer_aot_ops_sm90.cu",
     ]
     decode_sources = list(gen_dir.glob("*decode_head*.cu"))
     prefill_sources = [
@@ -217,6 +217,7 @@ if enable_aot:
                 "cxx": cxx_flags,
                 "nvcc": nvcc_flags,
             },
+            py_limited_api=True,
         )
     ]
     if enable_sm90:
@@ -229,6 +230,7 @@ if enable_aot:
                     "cxx": cxx_flags,
                     "nvcc": nvcc_flags + sm90a_flags,
                 },
+                py_limited_api=True,
             ),
         ]
 
@@ -236,5 +238,6 @@ setuptools.setup(
     version=get_version(),
     ext_modules=ext_modules,
     cmdclass=cmdclass,
+    options={"bdist_wheel": {"py_limited_api": "cp38"}},
     install_requires=install_requires,
 )

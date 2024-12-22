@@ -36,14 +36,13 @@ cudaError_t SinglePrefillWithKVCacheDispatched(SinglePrefillParams<DTypeQ, DType
 
 using namespace flashinfer;
 
-void single_prefill_with_kv_cache_sm90(unsigned int mask_mode_code, at::Tensor q, at::Tensor k,
+void single_prefill_with_kv_cache_sm90(int64_t mask_mode_code, at::Tensor q, at::Tensor k,
                                        at::Tensor v,
                                        std::optional<at::Tensor> maybe_packed_custom_mask,
                                        std::optional<at::Tensor> maybe_alibi_slopes, at::Tensor o,
-                                       unsigned int layout, int32_t window_left,
-                                       float logits_soft_cap, float sm_scale, float rope_scale,
-                                       float rope_theta, std::optional<at::Tensor> maybe_lse,
-                                       int64_t cuda_stream) {
+                                       int64_t layout, int64_t window_left, double logits_soft_cap,
+                                       double sm_scale, double rope_scale, double rope_theta,
+                                       std::optional<at::Tensor> maybe_lse, int64_t cuda_stream) {
   unsigned int head_dim = q.size(2);
   unsigned int num_qo_heads = q.size(1);
   unsigned int qo_len = q.size(0);

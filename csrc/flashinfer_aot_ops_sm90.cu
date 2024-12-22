@@ -21,43 +21,41 @@ void CutlassSegmentGEMMSM90(at::Tensor float_workspace_buffer, at::Tensor int_wo
                             at::Tensor y_stride, at::Tensor empty_x_data, bool weight_column_major,
                             int64_t cuda_stream);
 
-void single_prefill_with_kv_cache_sm90(unsigned int mask_mode_code, at::Tensor q, at::Tensor k,
+void single_prefill_with_kv_cache_sm90(int64_t mask_mode_code, at::Tensor q, at::Tensor k,
                                        at::Tensor v,
                                        std::optional<at::Tensor> maybe_packed_custom_mask,
                                        std::optional<at::Tensor> maybe_alibi_slopes, at::Tensor o,
-                                       unsigned int layout, int32_t window_left,
-                                       float logits_soft_cap, float sm_scale, float rope_scale,
-                                       float rope_theta, std::optional<at::Tensor> maybe_lse,
-                                       int64_t cuda_stream);
+                                       int64_t layout, int64_t window_left, double logits_soft_cap,
+                                       double sm_scale, double rope_scale, double rope_theta,
+                                       std::optional<at::Tensor> maybe_lse, int64_t cuda_stream);
 
 std::vector<int64_t> BatchPrefillWithKVCacheSM90Plan(
-    unsigned int head_dim, bool causal, at::Tensor float_workspace_buffer,
+    int64_t head_dim, bool causal, at::Tensor float_workspace_buffer,
     at::Tensor int_workspace_buffer, at::Tensor page_locked_int_workspace_buffer,
-    at::Tensor qo_indptr, at::Tensor kv_indptr, at::Tensor kv_len_arr, unsigned int batch_size,
-    unsigned int num_qo_heads, unsigned int num_kv_heads, unsigned int page_size,
-    bool enable_cuda_graph, int64_t cuda_stream);
+    at::Tensor qo_indptr, at::Tensor kv_indptr, at::Tensor kv_len_arr, int64_t batch_size,
+    int64_t num_qo_heads, int64_t num_kv_heads, int64_t page_size, bool enable_cuda_graph,
+    int64_t cuda_stream);
 
 void BatchPrefillWithRaggedKVCacheSM90Run(
-    unsigned int mask_mode_code, at::Tensor float_workspace_buffer, at::Tensor int_workspace_buffer,
+    int64_t mask_mode_code, at::Tensor float_workspace_buffer, at::Tensor int_workspace_buffer,
     std::vector<int64_t> plan_info_vec, at::Tensor q, at::Tensor k, at::Tensor v,
     std::optional<at::Tensor> maybe_custom_mask, std::optional<at::Tensor> maybe_alibi_slopes,
     at::Tensor qo_indptr, at::Tensor kv_indptr, std::optional<at::Tensor> maybe_qk_indptr,
-    at::Tensor o, unsigned int layout, int32_t window_left, float logits_soft_cap, float sm_scale,
-    float rope_scale, float rope_theta, std::optional<at::Tensor> maybe_lse, int64_t cuda_stream);
+    at::Tensor o, int64_t layout, int64_t window_left, double logits_soft_cap, double sm_scale,
+    double rope_scale, double rope_theta, std::optional<at::Tensor> maybe_lse, int64_t cuda_stream);
 
 void BatchPrefillWithPagedKVCacheSM90Run(
-    unsigned int mask_mode_code, at::Tensor float_workspace_buffer, at::Tensor int_workspace_buffer,
+    int64_t mask_mode_code, at::Tensor float_workspace_buffer, at::Tensor int_workspace_buffer,
     std::vector<int64_t> plan_info_vec, at::Tensor q, at::Tensor paged_k_cache,
     at::Tensor paged_v_cache, std::optional<at::Tensor> maybe_custom_mask,
     std::optional<at::Tensor> maybe_alibi_slopes, at::Tensor qo_indptr, at::Tensor paged_kv_indptr,
     at::Tensor paged_kv_indices, at::Tensor paged_kv_last_page_len,
-    std::optional<at::Tensor> maybe_qk_indptr, at::Tensor o, unsigned int layout,
-    int32_t window_left, float logits_soft_cap, float sm_scale, float rope_scale, float rope_theta,
+    std::optional<at::Tensor> maybe_qk_indptr, at::Tensor o, int64_t layout, int64_t window_left,
+    double logits_soft_cap, double sm_scale, double rope_scale, double rope_theta,
     std::optional<at::Tensor> maybe_lse, int64_t cuda_stream);
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("cutlass_segment_gemm_sm90", &CutlassSegmentGEMMSM90,
-        "Cutlass Segment GEMM operator for SM90");
+TORCH_LIBRARY(TORCH_EXTENSION_NAME, m) {
+  m.def("cutlass_segment_gemm_sm90", &CutlassSegmentGEMMSM90);
   m.def("single_prefill_with_kv_cache_sm90", &single_prefill_with_kv_cache_sm90);
   m.def("batch_prefill_with_kv_cache_sm90_plan", &BatchPrefillWithKVCacheSM90Plan);
   m.def("batch_prefill_with_ragged_kv_cache_sm90_run", &BatchPrefillWithRaggedKVCacheSM90Run);

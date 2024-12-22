@@ -34,8 +34,8 @@ using namespace flashinfer;
 
 void single_decode_with_kv_cache(at::Tensor q, at::Tensor k, at::Tensor v, at::Tensor tmp,
                                  std::optional<at::Tensor> alibi_slopes, at::Tensor o,
-                                 unsigned int layout, int window_left, float logits_soft_cap,
-                                 float sm_scale, float rope_scale, float rope_theta,
+                                 int64_t layout, int64_t window_left, double logits_soft_cap,
+                                 double sm_scale, double rope_scale, double rope_theta,
                                  int64_t cuda_stream) {
   CHECK_INPUT(q);
   CHECK_INPUT(k);

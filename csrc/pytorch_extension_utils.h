@@ -18,7 +18,7 @@
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cuda_fp8.h>
-#include <torch/csrc/utils/pybind.h>
+#include <torch/library.h>
 
 #ifdef FLASHINFER_ENABLE_BF16
 #define DISPATCH_PYTORCH_DTYPE_TO_CTYPE_FP16(pytorch_dtype, c_type, ...)                 \
