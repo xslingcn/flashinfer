@@ -69,19 +69,46 @@ struct SmemTransposeFP8_64x64 {
     auto tXsX_out = thr_copy_stsm.partition_D(s_out);
 
     cute::copy(tiled_copy_ldsm, tXsX, tXrX);
+    if (tid == 0) {
+      // printf("After load, tXrX tensor layout:\n");
+      // cute::print_layout(tXsX.layout());
+      printf("Data in tXrX:\n");
+      cute::print_tensor(tXrX);
+    }
     auto data = tXrX.data();
+    if (tid == 0) { 
+      printf("Before __byte_perm, first few elements:\n");
+      for (int n = 0; n < min(16, size(tXrX)); n++) {
+          printf("%d ", static_cast<int>(data[n]));
+      }
+      printf("\n");
+  }
     CUTLASS_PRAGMA_UNROLL
     for (int n = 0; n < size(tXrX); n += 8) {
       uint32_t* data_32bit = reinterpret_cast<uint32_t*>(&data[n]);
       auto upper = data_32bit[0];
       auto lower = data_32bit[1];
+      if (thread0() && n < 16) {
+        printf("n = %d, before __byte_perm: upper=0x%x, lower=0x%x\n", n, upper, lower);
+      }
       // select row-major elements.
       // from (0 1 16 17) (128 129 144 145) to (0 16 128 144) (1 17 129 145)
       // which is (0 1 8 9)
       data_32bit[0] = __byte_perm(upper, lower, 0x6420);
       data_32bit[1] = __byte_perm(upper, lower, 0x7531);
+
+      if (thread0() && n < 16) {
+        printf("n = %d, after __byte_perm: upper=0x%x, lower=0x%x\n", n, data_32bit[0], data_32bit[1]);
+      }
     }
     cute::copy(tiled_copy_stsm, tXrX, tXsX_out);
+
+    if (thread0()) {
+      // printf("After transpose, output tensor layout:\n");
+      // cute::print_layout(tXsX_out.layout());
+      printf("Data in output tensor:\n");
+      cute::print_tensor(tXsX_out);
+    }
   }
 
   template <class SmemTensor, class SmemTensorOut>
@@ -320,6 +347,7 @@ struct FP8CollectiveMainloop {
 
     pipeline_v.consumer_wait(smem_pipe_read);
     // pipeline_vt.producer_acquire(smem_pipe_write);
+    
     v_tranposer.do_transpose(sV_src, sVt_tgt, smem_pipe_read.index());
     pipeline_vt.producer_commit(smem_pipe_write);
     pipeline_v.consumer_release(smem_pipe_read);

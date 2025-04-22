@@ -24,7 +24,6 @@
 #include <flashinfer/layout.cuh>
 
 #include "cpu_reference.h"
-#include "flashattention_ops.h"
 #include "utils.h"
 using namespace flashinfer;
 
@@ -82,33 +81,7 @@ void _TestSingleFP8PrefillKernelCorrectness(int32_t qo_len, int32_t kv_len, int3
   thrust::host_vector<DTypeO> o_flashinfer_copy(o_d);
   std::vector<DTypeO> o_flashinfer(o_flashinfer_copy.begin(), o_flashinfer_copy.end());
 
-  /*
-      Below is FA3 implementation API call
-  */
-  auto device = torch::Device(torch::kCUDA, 0);
-  auto q_t = torch::from_blob(q.data(), {1, qo_len, num_qo_heads, head_dim}, torch::kFloat8_e4m3fn)
-                 .clone()
-                 .to(device);
-  auto k_t = torch::from_blob(k.data(), {1, kv_len, num_kv_heads, head_dim}, torch::kFloat8_e4m3fn)
-                 .clone()
-                 .to(device);
-  auto v_t = torch::from_blob(v.data(), {1, kv_len, num_kv_heads, head_dim}, torch::kFloat8_e4m3fn)
-                 .clone()
-                 .to(device);
-  auto scale_q_t = std::optional<at::Tensor>(
-      torch::from_blob(scale_q.data(), {1}, torch::kFloat).clone().to(device));
-  auto scale_k_t = std::optional<at::Tensor>(
-      torch::from_blob(scale_k.data(), {1}, torch::kFloat).clone().to(device));
-  auto scale_v_t = std::optional<at::Tensor>(
-      torch::from_blob(scale_v.data(), {1}, torch::kFloat).clone().to(device));
-  auto out_t = std::optional<at::Tensor>{};
-
   bool is_causal = mask_mode == MaskMode::kCausal;
-  auto o_t_ref =
-      mha_fwd(q_t, k_t, v_t, out_t, sm_scale, scale_q_t, scale_k_t, scale_v_t, is_causal)[0].to(
-          torch::Device(torch::kCPU));
-  DTypeO* o_ref_ptr = static_cast<DTypeO*>(o_t_ref.data_ptr());
-  std::vector<DTypeO> o_fa3(o_ref_ptr, o_ref_ptr + o_t_ref.numel());
 
   std::vector<DTypeO> o_cpu = cpu_reference::single_fp8_mha<DTypeQ, DTypeO, DTypeScale>(
       q, k, v, scale_q, scale_k, scale_v, qo_len, kv_len, num_qo_heads, num_kv_heads, head_dim,
@@ -118,11 +91,10 @@ void _TestSingleFP8PrefillKernelCorrectness(int32_t qo_len, int32_t kv_len, int3
       q_fp32, k_fp32, v_fp32, qo_len, kv_len, num_qo_heads, num_kv_heads, head_dim, sm_scale,
       is_causal, kv_layout);
 
-  float fa3_mse = utils::vec_cal_mse_(o_fa3, o_gold);
   float finfer_mse = utils::vec_cal_mse_(o_flashinfer, o_gold);
   float fcpu_mse = utils::vec_cal_mse_(o_cpu, o_gold);
-  printf("%d,%d,%d,%d,%d,%d,%f,%f,%f\n", num_qo_heads, num_kv_heads, qo_len, kv_len, head_dim,
-         int(mask_mode), fcpu_mse, fa3_mse, finfer_mse);
+  printf("%d,%d,%d,%d,%d,%d,%f,%f\n", num_qo_heads, num_kv_heads, qo_len, kv_len, head_dim,
+        int(mask_mode), fcpu_mse, finfer_mse);
 }
 
 template <typename DTypeIn, typename DTypeO>
@@ -149,6 +121,9 @@ int main() {
   printf(
       "num_qo_heads,num_kv_heads,qo_len,kv_len,head_dim,mask_mode,cpu_mse,fa3_mse,"
       "flashinfer_mse\n");
-  TestSingleFP8PrefillKernelLongContextCorrectness<cutlass::float_e4m3_t, cutlass::half_t>();
+  // TestSingleFP8PrefillKernelLongContextCorrectness<cutlass::float_e4m3_t, cutlass::half_t>();
+  _TestSingleFP8PrefillKernelCorrectness<cutlass::float_e4m3_t, cutlass::float_e4m3_t,
+                                            cutlass::half_t>(128, 128, 1, 1, 64, MaskMode(0),
+                                              QKVLayout(0), 600);
   return 0;
 }

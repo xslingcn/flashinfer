@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.23.1)
-project(flashinfer CUDA CXX)
-
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_ARCHITECTURES 90a)
 
+project(flashinfer CUDA CXX)
+
 # ########### Modify the following paths to your own paths ############
-set(FA3_INCLUDE_DIR /home/ylzhao/flash-attention/hopper)
-set(LIBTORCH_INCLUDE_DIR /home/ylzhao/libtorch)
+# set(FA3_INCLUDE_DIR /home/xsling/Code/flash-attention/hopper)
+set(LIBTORCH_INCLUDE_DIR /home/xsling/Code/libtorch)
 # ########### Modify the above paths to your own paths ############
 
 find_package(Python3 REQUIRED)
@@ -38,6 +38,7 @@ target_compile_options(
   FLASHINFER_LIB
   PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
           --expt-extended-lambda
+          --expt-relaxed-constexpr
           --use_fast_math
           --compiler-options
           -fPIC
@@ -47,20 +48,20 @@ target_include_directories(FLASHINFER_LIB PRIVATE ${FLASHINFER_INCLUDE_DIR})
 target_include_directories(FLASHINFER_LIB PRIVATE ${CUTLASS_INCLUDE_DIR})
 
 # build FA3 library
-file(GLOB FA3_IMPL_FILES ${FA3_INCLUDE_DIR}/flash_fwd_*.cu)
-add_library(FA3_LIB STATIC ${FA3_IMPL_FILES})
-set_target_properties(FA3_LIB PROPERTIES CMAKE_CUDA_ARCHITECTURES "90a")
-target_compile_options(
-  FA3_LIB
-  PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
-          --expt-extended-lambda
-          --use_fast_math
-          --compiler-options
-          -fPIC
-          --generate-code=arch=compute_90a,code=sm_90a
-          >)
-target_include_directories(FA3_LIB PRIVATE ${CUTLASS_INCLUDE_DIR}
-                                           ${FA3_INCLUDE_DIR})
+# file(GLOB FA3_IMPL_FILES ${FA3_INCLUDE_DIR}/flash_fwd_*.cu)
+# add_library(FA3_LIB STATIC ${FA3_IMPL_FILES})
+# set_target_properties(FA3_LIB PROPERTIES CMAKE_CUDA_ARCHITECTURES "90a")
+# target_compile_options(
+#   FA3_LIB
+#   PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+#           --expt-extended-lambda
+#           --use_fast_math
+#           --compiler-options
+#           -fPIC
+#           --generate-code=arch=compute_90a,code=sm_90a
+#           >)
+# target_include_directories(FA3_LIB PRIVATE ${CUTLASS_INCLUDE_DIR}
+#                                            ${FA3_INCLUDE_DIR})
 
 # build benchmark FA3/FlashInfer/FP16
 add_executable(bench_single_prefill
@@ -79,9 +80,11 @@ target_include_directories(
                                ${Python3_INCLUDE_DIRS})
 target_include_directories(bench_single_prefill PRIVATE ${CUTLASS_INCLUDE_DIR})
 target_include_directories(bench_single_prefill PRIVATE ${NVBENCH_INCLUDE_DIR})
-target_include_directories(bench_single_prefill PRIVATE ${FA3_INCLUDE_DIR})
+# target_include_directories(bench_single_prefill PRIVATE ${FA3_INCLUDE_DIR})
+# target_link_libraries(bench_single_prefill PRIVATE nvbench::main
+#                                                    ${TORCH_LIBRARIES} FA3_LIB)
 target_link_libraries(bench_single_prefill PRIVATE nvbench::main
-                                                   ${TORCH_LIBRARIES} FA3_LIB)
+                                                   ${TORCH_LIBRARIES})
 
 # build test FA3 / FlashInfer / FP16 test cases
 add_executable(test_single_prefill_fa3_sm90
@@ -99,7 +102,9 @@ target_include_directories(
   test_single_prefill_fa3_sm90
   PRIVATE ${FLASHINFER_INCLUDE_DIR} ${TORCH_INCLUDE_DIRS}
           ${Python3_INCLUDE_DIRS})
-target_include_directories(test_single_prefill_fa3_sm90
-                           PRIVATE ${FA3_INCLUDE_DIR})
+# target_include_directories(test_single_prefill_fa3_sm90
+#                            PRIVATE ${FA3_INCLUDE_DIR})
+# target_link_libraries(test_single_prefill_fa3_sm90
+#                       PRIVATE ${TORCH_LIBRARIES} FA3_LIB FLASHINFER_LIB)
 target_link_libraries(test_single_prefill_fa3_sm90
-                      PRIVATE ${TORCH_LIBRARIES} FA3_LIB FLASHINFER_LIB)
+                      PRIVATE ${TORCH_LIBRARIES} FLASHINFER_LIB)

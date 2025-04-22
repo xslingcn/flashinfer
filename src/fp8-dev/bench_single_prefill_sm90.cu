@@ -30,7 +30,7 @@
 #include <nvbench/nvbench.cuh>
 #include <optional>
 
-#include "flashattention_ops.h"
+// #include "flashattention_ops.h"
 #include "utils.h"
 
 namespace flashinfer {
@@ -246,95 +246,95 @@ void single_fp16_prefill_with_kv_cache_sm90(nvbench::state& state) {
   summ.set_float64("value", tflops);
 }
 
-void single_fp8_fa3_prefill_with_kv_cache_sm90(nvbench::state& state) {
-  size_t qo_len = state.get_int64("seq_len");
-  size_t kv_len = state.get_int64("seq_len");
-  size_t num_qo_heads = state.get_int64("num_qo_heads");
-  size_t num_kv_heads = state.get_int64("num_kv_heads");
-  size_t head_dim = state.get_int64("head_dim");
-  MaskMode mask_mode = MaskMode(state.get_int64("mask_mode"));
+// void single_fp8_fa3_prefill_with_kv_cache_sm90(nvbench::state& state) {
+//   size_t qo_len = state.get_int64("seq_len");
+//   size_t kv_len = state.get_int64("seq_len");
+//   size_t num_qo_heads = state.get_int64("num_qo_heads");
+//   size_t num_kv_heads = state.get_int64("num_kv_heads");
+//   size_t head_dim = state.get_int64("head_dim");
+//   MaskMode mask_mode = MaskMode(state.get_int64("mask_mode"));
 
-  bool is_causal = mask_mode == MaskMode::kCausal;
-  float sm_scale = 1.f / std::sqrt(float(head_dim));
+//   bool is_causal = mask_mode == MaskMode::kCausal;
+//   float sm_scale = 1.f / std::sqrt(float(head_dim));
 
-  if (qo_len > kv_len) {
-    state.skip("qo_len should be less than kv_len");
-  }
+//   if (qo_len > kv_len) {
+//     state.skip("qo_len should be less than kv_len");
+//   }
 
-  using DTypeQ = cutlass::float_e4m3_t;
-  using DTypeKV = cutlass::float_e4m3_t;
-  using DTypeO = cutlass::half_t;
-  using IdType = int32_t;
-  using DTypeScale = float;
+//   using DTypeQ = cutlass::float_e4m3_t;
+//   using DTypeKV = cutlass::float_e4m3_t;
+//   using DTypeO = cutlass::half_t;
+//   using IdType = int32_t;
+//   using DTypeScale = float;
 
-  std::vector<DTypeQ> q(qo_len * num_qo_heads * head_dim);
-  std::vector<DTypeKV> k(kv_len * num_kv_heads * head_dim);
-  std::vector<DTypeKV> v(kv_len * num_kv_heads * head_dim);
-  std::vector<DTypeO> o(qo_len * num_qo_heads * head_dim);
-  std::vector<DTypeScale> scale_q(1);
-  std::vector<DTypeScale> scale_k(1);
-  std::vector<DTypeScale> scale_v(1);
+//   std::vector<DTypeQ> q(qo_len * num_qo_heads * head_dim);
+//   std::vector<DTypeKV> k(kv_len * num_kv_heads * head_dim);
+//   std::vector<DTypeKV> v(kv_len * num_kv_heads * head_dim);
+//   std::vector<DTypeO> o(qo_len * num_qo_heads * head_dim);
+//   std::vector<DTypeScale> scale_q(1);
+//   std::vector<DTypeScale> scale_k(1);
+//   std::vector<DTypeScale> scale_v(1);
 
-  utils::vec_normal_(q);
-  utils::vec_normal_(k);
-  utils::vec_normal_(v);
+//   utils::vec_normal_(q);
+//   utils::vec_normal_(k);
+//   utils::vec_normal_(v);
 
-  utils::vec_zero_(o);
-  utils::vec_normal_(scale_q);
-  utils::vec_normal_(scale_k);
-  utils::vec_normal_(scale_v);
+//   utils::vec_zero_(o);
+//   utils::vec_normal_(scale_q);
+//   utils::vec_normal_(scale_k);
+//   utils::vec_normal_(scale_v);
 
-  auto device = torch::Device(torch::kCUDA, 0);
-  auto q_t =
-      torch::from_blob(q.data(), {1, uint32_t(qo_len), uint32_t(num_qo_heads), uint32_t(head_dim)},
-                       torch::kFloat8_e4m3fn)
-          .clone()
-          .to(device);
-  auto k_t =
-      torch::from_blob(k.data(), {1, uint32_t(kv_len), uint32_t(num_kv_heads), uint32_t(head_dim)},
-                       torch::kFloat8_e4m3fn)
-          .clone()
-          .to(device);
-  auto v_t =
-      torch::from_blob(v.data(), {1, uint32_t(kv_len), uint32_t(num_kv_heads), uint32_t(head_dim)},
-                       torch::kFloat8_e4m3fn)
-          .clone()
-          .to(device);
-  auto scale_q_t = std::optional<at::Tensor>(
-      torch::from_blob(scale_q.data(), {1}, torch::kFloat).clone().to(device));
-  auto scale_k_t = std::optional<at::Tensor>(
-      torch::from_blob(scale_k.data(), {1}, torch::kFloat).clone().to(device));
-  auto scale_v_t = std::optional<at::Tensor>(
-      torch::from_blob(scale_v.data(), {1}, torch::kFloat).clone().to(device));
-  auto out_t = std::optional<at::Tensor>{};
+//   auto device = torch::Device(torch::kCUDA, 0);
+//   auto q_t =
+//       torch::from_blob(q.data(), {1, uint32_t(qo_len), uint32_t(num_qo_heads), uint32_t(head_dim)},
+//                        torch::kFloat8_e4m3fn)
+//           .clone()
+//           .to(device);
+//   auto k_t =
+//       torch::from_blob(k.data(), {1, uint32_t(kv_len), uint32_t(num_kv_heads), uint32_t(head_dim)},
+//                        torch::kFloat8_e4m3fn)
+//           .clone()
+//           .to(device);
+//   auto v_t =
+//       torch::from_blob(v.data(), {1, uint32_t(kv_len), uint32_t(num_kv_heads), uint32_t(head_dim)},
+//                        torch::kFloat8_e4m3fn)
+//           .clone()
+//           .to(device);
+//   auto scale_q_t = std::optional<at::Tensor>(
+//       torch::from_blob(scale_q.data(), {1}, torch::kFloat).clone().to(device));
+//   auto scale_k_t = std::optional<at::Tensor>(
+//       torch::from_blob(scale_k.data(), {1}, torch::kFloat).clone().to(device));
+//   auto scale_v_t = std::optional<at::Tensor>(
+//       torch::from_blob(scale_v.data(), {1}, torch::kFloat).clone().to(device));
+//   auto out_t = std::optional<at::Tensor>{};
 
-  state.add_global_memory_reads<uint8_t>(
-      (qo_len * num_qo_heads + 2 * kv_len * num_kv_heads) * sizeof(DTypeQ) * head_dim, "Read");
-  state.add_global_memory_writes<half>(qo_len * num_qo_heads * head_dim, "Write");
+//   state.add_global_memory_reads<uint8_t>(
+//       (qo_len * num_qo_heads + 2 * kv_len * num_kv_heads) * sizeof(DTypeQ) * head_dim, "Read");
+//   state.add_global_memory_writes<half>(qo_len * num_qo_heads * head_dim, "Write");
 
-  state.exec(nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-    timer.start();
+//   state.exec(nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+//     timer.start();
 
-    auto o_t_ref =
-        mha_fwd(q_t, k_t, v_t, out_t, sm_scale, scale_q_t, scale_k_t, scale_v_t, is_causal)[0];
+//     auto o_t_ref =
+//         mha_fwd(q_t, k_t, v_t, out_t, sm_scale, scale_q_t, scale_k_t, scale_v_t, is_causal)[0];
 
-    timer.stop();
-    cudaDeviceSynchronize();
-  });
+//     timer.stop();
+//     cudaDeviceSynchronize();
+//   });
 
-  const auto measured_mean = static_cast<nvbench::float32_t>(
-      state.get_summary("nv/cold/time/gpu/mean").get_float64("value"));
-  auto& summ = state.add_summary("nv/tflops");
-  summ.set_string("description", "Achieved TFlops/s");
-  summ.set_string("name", "TFlops/s");
-  float tflops;
-  if (is_causal) {
-    tflops = qo_len * (2 * kv_len - qo_len) * 2 * num_kv_heads * head_dim / measured_mean / 1e12;
-  } else {
-    tflops = qo_len * kv_len * 4 * num_kv_heads * head_dim / measured_mean / 1e12;
-  }
-  summ.set_float64("value", tflops);
-}
+//   const auto measured_mean = static_cast<nvbench::float32_t>(
+//       state.get_summary("nv/cold/time/gpu/mean").get_float64("value"));
+//   auto& summ = state.add_summary("nv/tflops");
+//   summ.set_string("description", "Achieved TFlops/s");
+//   summ.set_string("name", "TFlops/s");
+//   float tflops;
+//   if (is_causal) {
+//     tflops = qo_len * (2 * kv_len - qo_len) * 2 * num_kv_heads * head_dim / measured_mean / 1e12;
+//   } else {
+//     tflops = qo_len * kv_len * 4 * num_kv_heads * head_dim / measured_mean / 1e12;
+//   }
+//   summ.set_float64("value", tflops);
+// }
 
 NVBENCH_BENCH(single_fp8_prefill_with_kv_cache_sm90)
     .set_name(("single_fp8_prefill_with_kv_cache_sm90"))
@@ -354,10 +354,10 @@ NVBENCH_BENCH(single_fp16_prefill_with_kv_cache_sm90)
     .add_int64_axis("mask_mode", {0, 1})
     .add_int64_axis("kv_layout", {0});
 
-NVBENCH_BENCH(single_fp8_fa3_prefill_with_kv_cache_sm90)
-    .set_name(("single_fp8_fa3_prefill_with_kv_cache_sm90"))
-    .add_int64_axis("seq_len", {2048, 4096, 8192, 16384})
-    .add_int64_axis("num_qo_heads", {32})
-    .add_int64_axis("num_kv_heads", {32})
-    .add_int64_axis("head_dim", {64, 128, 256})
-    .add_int64_axis("mask_mode", {0, 1});
+// NVBENCH_BENCH(single_fp8_fa3_prefill_with_kv_cache_sm90)
+//     .set_name(("single_fp8_fa3_prefill_with_kv_cache_sm90"))
+//     .add_int64_axis("seq_len", {2048, 4096, 8192, 16384})
+//     .add_int64_axis("num_qo_heads", {32})
+//     .add_int64_axis("num_kv_heads", {32})
+//     .add_int64_axis("head_dim", {64, 128, 256})
+//     .add_int64_axis("mask_mode", {0, 1});
