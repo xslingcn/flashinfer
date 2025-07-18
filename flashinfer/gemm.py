@@ -63,6 +63,22 @@ def gen_gemm_module() -> JitSpec:
 def get_gemm_module():
     module = gen_gemm_module().build_and_load()
 
+    @register_custom_op("flashinfer::gemm_bf16", mutates_args=())
+    def gemm_bf16(
+        A: torch.Tensor,
+        B: torch.Tensor,
+        bias: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        return F.linear(A, B, bias)
+
+    @register_fake_op("flashinfer::gemm_bf16")
+    def _fake_gemm_bf16(
+        A: torch.Tensor,
+        B: torch.Tensor,
+        bias: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        return torch.empty(*A.shape[:-1], B.shape[0])
+
     # torch library for bmm_fp8
 
     @register_custom_op("flashinfer::bmm_fp8", mutates_args=("workspace_buffer", "D"))
@@ -145,6 +161,7 @@ def get_gemm_module():
     _gemm_module = SimpleNamespace(
         bmm_fp8=bmm_fp8,
         cutlass_segment_gemm=cutlass_segment_gemm,
+        gemm_bf16=gemm_bf16,
     )
 
     return _gemm_module
@@ -871,6 +888,13 @@ def _cudnn_gemm_fp8(
     execute_cudnn_gemm_with_per_tensor_q_graph(graph, a, b, dq_scale, out)
     return out
 
+
+def gemm_bf16(
+    A: torch.Tensor,
+    B: torch.Tensor,
+    bias: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    return get_gemm_module().gemm_bf16(A, B, bias)
 
 def bmm_fp8(
     A: torch.Tensor,

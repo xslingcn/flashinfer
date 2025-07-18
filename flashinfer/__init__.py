@@ -65,6 +65,7 @@ from .fused_moe import (
 )
 from .gemm import SegmentGEMMWrapper as SegmentGEMMWrapper
 from .gemm import bmm_fp8 as bmm_fp8
+from .gemm import gemm_bf16 as gemm_bf16
 from .mla import BatchMLAPagedAttentionWrapper as BatchMLAPagedAttentionWrapper
 from .norm import fused_add_rmsnorm as fused_add_rmsnorm
 from .norm import gemma_fused_add_rmsnorm as gemma_fused_add_rmsnorm
