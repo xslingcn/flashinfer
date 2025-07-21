@@ -45,6 +45,7 @@ from .utils import (
     register_custom_op,
     register_fake_op,
 )
+from .apply import apply
 
 
 def gen_gemm_module() -> JitSpec:
@@ -64,6 +65,8 @@ def get_gemm_module():
     module = gen_gemm_module().build_and_load()
 
     @register_custom_op("flashinfer::gemm_bf16", mutates_args=())
+    @apply(lambda A, B, bias=None:
+                f"gemm_m_dynamic_n_{B.shape[0]}_k_{B.shape[1]}")
     def gemm_bf16(
         A: torch.Tensor,
         B: torch.Tensor,
