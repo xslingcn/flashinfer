@@ -42,20 +42,16 @@ static_assert(sizeof(CUtensorMap) == 128);
 constexpr size_t kDescriptorStorageBytes = kTensorMapCount * sizeof(CUtensorMap);
 constexpr int64_t kBetaTmaMinHeads = 8;
 
-static __global__ void PackBetaForTmaKernel(const __nv_bfloat16* beta,
-                                            __nv_bfloat16* beta_tma,
-                                            int64_t token_count,
-                                            int64_t padded_token_count,
+static __global__ void PackBetaForTmaKernel(const __nv_bfloat16* beta, __nv_bfloat16* beta_tma,
+                                            int64_t token_count, int64_t padded_token_count,
                                             int32_t num_heads) {
-  const int64_t linear_index =
-      static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  const int64_t linear_index = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
   const int64_t padded_elements = padded_token_count * kBetaTmaMinHeads;
   if (linear_index >= padded_elements) {
     return;
   }
   const int64_t token_index = linear_index / kBetaTmaMinHeads;
-  const int32_t head_index =
-      static_cast<int32_t>(linear_index % kBetaTmaMinHeads);
+  const int32_t head_index = static_cast<int32_t>(linear_index % kBetaTmaMinHeads);
   __nv_bfloat16 value = __float2bfloat16(0.0f);
   if (token_index < token_count && head_index < num_heads) {
     value = beta[token_index * num_heads + head_index];
@@ -120,17 +116,35 @@ inline void CheckNoPartialOverlapOrExactAlias(const TensorView& lhs, const char*
       << " must either be disjoint or exactly alias the same storage";
 }
 
-inline void CheckExactSm100a(int32_t device_id) {
+#if defined(FLASHINFER_FLASH_KDA_TARGET_MINOR) == defined(FLASHINFER_FLASH_KDA_TARGET_FAMILY)
+#error "exactly one FlashKDA target must be defined by the JIT/AOT spec"
+#endif
+
+#if defined(FLASHINFER_FLASH_KDA_TARGET_MINOR)
+constexpr int kFlashKDATargetMinor = FLASHINFER_FLASH_KDA_TARGET_MINOR;
+static_assert(kFlashKDATargetMinor == 0, "legacy FlashKDA target must be exact SM100a");
+#else
+constexpr int kFlashKDATargetFamily = FLASHINFER_FLASH_KDA_TARGET_FAMILY;
+static_assert(kFlashKDATargetFamily == 100, "FlashKDA family target must be SM100f");
+#endif
+
+inline void CheckFlashKDATarget(int32_t device_id) {
   int major = 0;
   int minor = 0;
   CheckCuda(cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, device_id),
             "cudaDeviceGetAttribute(major)");
   CheckCuda(cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, device_id),
             "cudaDeviceGetAttribute(minor)");
-  TVM_FFI_ICHECK(major == 10 && minor == 0)
-      << "FlashKDA frozen kernels require exact compute capability 10.0 "
-         "(sm_100a), got "
+#if defined(FLASHINFER_FLASH_KDA_TARGET_MINOR)
+  TVM_FFI_ICHECK(major == 10 && minor == kFlashKDATargetMinor)
+      << "this FlashKDA module was compiled for exact compute capability 10."
+      << kFlashKDATargetMinor << ", got " << major << "." << minor;
+#else
+  TVM_FFI_ICHECK(major == 10 && (minor == 0 || minor == 3))
+      << "this FlashKDA sm_100f module supports compute capability 10.0 or "
+         "10.3, got "
       << major << "." << minor;
+#endif
 }
 
 inline int64_t CheckCommonInputs(const TensorView& q, const TensorView& k, const TensorView& v,
@@ -311,13 +325,12 @@ inline void PackBetaForTmaIfNeeded(const TensorView& beta, const TensorView& bet
   const int64_t padded_elements = padded_token_count * kBetaTmaMinHeads;
   constexpr int32_t kThreads = 256;
   const int64_t blocks_i64 = (padded_elements + kThreads - 1) / kThreads;
-  TVM_FFI_ICHECK(blocks_i64 > 0 &&
-                 blocks_i64 <= std::numeric_limits<uint32_t>::max())
+  TVM_FFI_ICHECK(blocks_i64 > 0 && blocks_i64 <= std::numeric_limits<uint32_t>::max())
       << "beta TMA pack grid.x is out of range: " << blocks_i64;
   PackBetaForTmaKernel<<<static_cast<uint32_t>(blocks_i64), kThreads, 0, stream>>>(
       reinterpret_cast<const __nv_bfloat16*>(beta.data_ptr()),
-      reinterpret_cast<__nv_bfloat16*>(beta_tma.data_ptr()), token_count,
-      padded_token_count, static_cast<int32_t>(num_heads));
+      reinterpret_cast<__nv_bfloat16*>(beta_tma.data_ptr()), token_count, padded_token_count,
+      static_cast<int32_t>(num_heads));
   CheckCuda(cudaGetLastError(), "PackBetaForTmaKernel launch");
 }
 
