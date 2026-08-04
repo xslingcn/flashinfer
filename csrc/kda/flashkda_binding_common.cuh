@@ -44,14 +44,14 @@ constexpr int64_t kBetaTmaMinHeads = 8;
 
 static __global__ void PackBetaForTmaKernel(const __nv_bfloat16* beta, __nv_bfloat16* beta_tma,
                                             int64_t token_count, int64_t padded_token_count,
-                                            int32_t num_heads) {
+                                            int32_t num_heads, int32_t padded_heads) {
   const int64_t linear_index = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-  const int64_t padded_elements = padded_token_count * kBetaTmaMinHeads;
+  const int64_t padded_elements = padded_token_count * padded_heads;
   if (linear_index >= padded_elements) {
     return;
   }
-  const int64_t token_index = linear_index / kBetaTmaMinHeads;
-  const int32_t head_index = static_cast<int32_t>(linear_index % kBetaTmaMinHeads);
+  const int64_t token_index = linear_index / padded_heads;
+  const int32_t head_index = static_cast<int32_t>(linear_index % padded_heads);
   __nv_bfloat16 value = __float2bfloat16(0.0f);
   if (token_index < token_count && head_index < num_heads) {
     value = beta[token_index * num_heads + head_index];
@@ -228,14 +228,14 @@ inline int64_t CheckCommonInputs(const TensorView& q, const TensorView& k, const
   TVM_FFI_ICHECK(beta.ndim() >= 2 && beta.size(beta.ndim() - 1) == num_heads &&
                  beta.numel() == token_count * num_heads)
       << "beta must match flattened [tokens, H]";
-  const int64_t beta_tma_heads = std::max<int64_t>(num_heads, 8);
+  const int64_t beta_tma_heads = ((num_heads + 7) / 8) * 8;
   TVM_FFI_ICHECK(beta_tma.ndim() >= 2 && beta_tma.size(beta_tma.ndim() - 1) == beta_tma_heads &&
                  beta_tma.numel() % beta_tma_heads == 0 &&
                  beta_tma.numel() / beta_tma_heads >= std::max<int64_t>(token_count, 32))
-      << "beta_tma must have at least [max(tokens, 32), max(H, 8)] "
+      << "beta_tma must have at least [max(tokens, 32), round_up(H, 8)] "
          "storage";
   CheckNoPartialOverlapOrExactAlias(beta, "beta", beta_tma, "beta_tma");
-  if (num_heads < kBetaTmaMinHeads) {
+  if (num_heads % kBetaTmaMinHeads != 0) {
     CheckNoOverlap(beta_tma, "beta_tma", q, "q");
     CheckNoOverlap(beta_tma, "beta_tma", k, "k");
     CheckNoOverlap(beta_tma, "beta_tma", v, "v");
@@ -314,15 +314,19 @@ inline int64_t CheckCommonInputs(const TensorView& q, const TensorView& k, const
 
 inline void PackBetaForTmaIfNeeded(const TensorView& beta, const TensorView& beta_tma,
                                    int64_t num_heads, cudaStream_t stream) {
-  // Full chunks TMA-load an eight-head beta box.  Only H<8 requires a
-  // materialized row-padded source; H>=8 aliases beta whenever a full chunk
-  // exists, while shorter inputs stay entirely on the direct-load tail path.
-  if (num_heads >= kBetaTmaMinHeads) {
+  // Full chunks TMA-load an eight-head beta box at head coordinate
+  // (head / 8) * 8, so the descriptor's head extent must be a multiple of 8
+  // (which also satisfies the 16-byte global-stride rule for bf16).  Any
+  // H % 8 != 0 requires a materialized head-padded source; aligned H aliases
+  // beta whenever a full chunk exists, while shorter inputs stay entirely on
+  // the direct-load tail path.
+  if (num_heads % kBetaTmaMinHeads == 0) {
     return;
   }
+  const int64_t padded_heads = beta_tma.size(beta_tma.ndim() - 1);
   const int64_t token_count = beta.numel() / num_heads;
-  const int64_t padded_token_count = beta_tma.numel() / kBetaTmaMinHeads;
-  const int64_t padded_elements = padded_token_count * kBetaTmaMinHeads;
+  const int64_t padded_token_count = beta_tma.numel() / padded_heads;
+  const int64_t padded_elements = padded_token_count * padded_heads;
   constexpr int32_t kThreads = 256;
   const int64_t blocks_i64 = (padded_elements + kThreads - 1) / kThreads;
   TVM_FFI_ICHECK(blocks_i64 > 0 && blocks_i64 <= std::numeric_limits<uint32_t>::max())
@@ -330,7 +334,7 @@ inline void PackBetaForTmaIfNeeded(const TensorView& beta, const TensorView& bet
   PackBetaForTmaKernel<<<static_cast<uint32_t>(blocks_i64), kThreads, 0, stream>>>(
       reinterpret_cast<const __nv_bfloat16*>(beta.data_ptr()),
       reinterpret_cast<__nv_bfloat16*>(beta_tma.data_ptr()), token_count, padded_token_count,
-      static_cast<int32_t>(num_heads));
+      static_cast<int32_t>(num_heads), static_cast<int32_t>(padded_heads));
   CheckCuda(cudaGetLastError(), "PackBetaForTmaKernel launch");
 }
 
@@ -415,6 +419,9 @@ inline CUtensorMap EncodeBetaTma(const TensorView& tensor) {
   uint64_t global_dim[2] = {static_cast<uint64_t>(d1), static_cast<uint64_t>(outer1)};
   TVM_FFI_ICHECK(global_dim[0] >= 8 && global_dim[1] >= 32)
       << "beta_tma cannot encode the (8, 32) TMA box";
+  TVM_FFI_ICHECK(d1 % 8 == 0) << "beta_tma head extent must be a multiple of 8 "
+                                 "(16-byte TMA global-stride rule for bf16), got "
+                              << d1;
   uint64_t global_strides[1] = {static_cast<uint64_t>(d1 * sizeof(__nv_bfloat16))};
   uint32_t box_dim[2] = {8, 32};
   uint32_t elem_strides[2] = {1, 1};

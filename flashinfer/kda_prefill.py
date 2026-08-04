@@ -381,7 +381,14 @@ def _beta_tma_source(
     total_tokens = batch_size * seq_len
     beta_flat = beta.reshape(total_tokens, num_heads)
     padded_tokens = max(total_tokens, 32)
-    padded_heads = max(num_heads, _FLASH_KDA_BETA_TMA_MIN_HEADS)
+    # The frozen kernel fetches (8, 32) beta boxes at head coordinate
+    # (head // 8) * 8, and bf16 TMA global strides must be 16-byte aligned,
+    # so the TMA source needs a head extent rounded up to a multiple of 8
+    # (e.g. H=12 at Kimi-K3 TP8 pads to 16).
+    padded_heads = max(
+        -(-num_heads // _FLASH_KDA_BETA_TMA_MIN_HEADS) * _FLASH_KDA_BETA_TMA_MIN_HEADS,
+        _FLASH_KDA_BETA_TMA_MIN_HEADS,
+    )
     if padded_tokens == total_tokens and padded_heads == num_heads:
         return beta_flat
     shape = (padded_tokens, padded_heads)
